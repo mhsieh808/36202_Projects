@@ -1,0 +1,291 @@
+---
+title: 'Stat 202, Project 2: Airlines'
+author:
+- 'Michelle Hsieh'
+- 'mhsieh2'
+- 'There should be no collaborators'
+date: "Due 4/18/18 at 11:59 pm"
+output:
+  pdf_document:
+    toc: yes
+  html_document:
+    toc: yes
+---
+
+```{r, warning=FALSE, echo=FALSE, message=FALSE}
+###########################
+# RUN THIS BEFORE STARTING
+###########################
+
+library("tidyverse")
+library("knitr")
+library("pander") 
+library("car")
+
+```
+
+```{r, include=FALSE}
+###########################
+# STYLE EDITS: IGNORE THIS
+###########################
+
+knitr::opts_chunk$set(message = FALSE) # include this if you don't want markdown to knit messages
+knitr::opts_chunk$set(warning = FALSE) # include this if you don't want markdown to knit warnings
+knitr::opts_chunk$set(echo=FALSE) # set echo=FALSE to hide code from html/pdf output
+
+```
+#  Introduction
+
+I chose this research scenario because I'm interested in knowing what factors significantly affect plane arrival delay. It is believed that some days of the week have more delays than others and determining whether the day of the week is a significant factor would help people plan out their flights better. The overall modeling goal is to predict flight arrival delay time. We are trying to predict this to see whether the predictor variable significantly affects the arrival delay time. I would also like to see if there are other factors unaccounted for that may also affect the arrival delay time. The population of interest would be airplanes that have arrival delay times. 
+
+
+# Exploratory Data Analysis
+
+## Data
+```{r, message=FALSE}
+# Where is the data stored?
+ data_location <- "http://stat.cmu.edu/202/data/Airlines_project2.csv"
+
+# Read in the data
+airplaneData <- read_csv(data_location)
+
+# Converting categorical variables to factors with meaningful levels
+weekday_names <- c("Mon", "Tues", "Wed", "Thurs", "Fri", "Sat", "Sun")
+airlines <- airplaneData %>% 
+                mutate(DayOfWeek = factor(DayOfWeek,
+                                          levels = 1:7,
+                                          labels = weekday_names),
+                       LateAircraft = factor(LateAircraft,
+                                            levels = 0:1,
+                                            labels = c("Not Late", "Late")))
+
+# Creating the table of means
+air_means <- airlines %>% 
+                group_by(DayOfWeek, LateAircraft) %>%
+                summarize(ArrDelayMean = mean(ArrDelay))
+
+kable(head(airlines))
+
+```
+
+In the airlines data set, there are 804 observations with 3 variables. The variables are ArrDelay(arrival delay in minutes), DayOfWeek(day of the week), and LateAircraft(was there a delay? 1=Yes, 0=No). ArrDelay is the response. The predictors of interest are DayOfWeek and LateAircraft. We are interested in how much the predictors actually affect the arrival delay time.
+
+
+## Univariate exploration
+
+
+
+```{r, fig.height=4, fig.width=12}
+
+par(mfrow=c(1, 3)) # for 3 graphs in a 1x3 table
+
+airlines <- mutate(airlines, 
+               newArrDelay =log(ArrDelay))
+
+hist(airlines$ArrDelay)
+counts1<-table(airlines$DayOfWeek)
+counts2<-table(airlines$LateAircraft)
+barplot(counts1)
+barplot(counts2)
+
+x1 <- airlines %>%
+  dplyr::summarize(Min  = min(ArrDelay, na.rm = TRUE),
+  Q1 = quantile(ArrDelay)[2],
+  Median = quantile(ArrDelay)[3],
+  Mean = mean(ArrDelay, na.rm = TRUE),
+  Q3 = quantile(ArrDelay)[4],
+  Max = max(ArrDelay, na.rm = TRUE),
+  SD = sd(ArrDelay, na.rm = TRUE)) 
+
+rownames(x1)<-c("ArrDelay")
+kable(x1)
+x2 <- airlines %>% count(DayOfWeek)
+x3 <- airlines %>% count(LateAircraft) 
+kable(x2)
+kable(x3)
+
+```
+
+
+
+The graph for ArrDelay is skewed right with a mean of 54.0087 minutes and a standard deviation of 55.7725 minutes. I need to make further investigation to see if a transformation is needed. The graph for DayOfWeek seems pretty evenly distributed between all the days.Monday has a count of 123, Tuesday has 120, Wednesday has 108, Thursday has 133, Friday has 126, Saturday has 95, and Sunday has 99. The graph for LateAircraft is evenly distributed between the two categorical variables. Not Late has a count of 406 and late has a count of 398.
+
+
+
+##Assumptions
+
+
+
+```{r}
+
+par(mfrow=c(1,2))
+airlines_aov <- aov(newArrDelay ~ DayOfWeek + LateAircraft + DayOfWeek:LateAircraft, data = airlines) 
+
+library(car)
+qqPlot(airlines_aov$residuals, main = "QQ-plot")
+
+plot(x = fitted(airlines_aov), # fitted values on x axis
+     y = residuals(airlines_aov), # residuals on y axis
+     xlab = "Fitted", # x label
+     ylab = "Residuals", # y label
+     main = "Residuals vs Fitted" # title label
+)
+abline(h = 0) 
+```
+
+Based on the QQ plot, the data do not look normal because the data points go outside of the red bounded lines, therefore we cannot assume normality. We need to perform a transformation to make the data more normal. The log transformation made the points become more within the red line bounds. There are some points at the ends of the graph that do not fall within the red lines, but they can be overlooked since they're at the endpoints. Based on the residual plot,the residuals are roughly equally spread above and below the 0 line, so we meet the assumption that the errors have constant spread. The mean is also at 0 for the residual plot. Since the residuals are randomly scattered with no pattern, this shows that the data is independent.
+
+
+
+
+## Interactions and group means
+
+**Interaction plot**:
+
+```{r}
+# Creating the table of means
+air_means <- airlines %>% 
+                group_by(DayOfWeek, LateAircraft) %>%
+                summarize(ArrDelayMean = mean(ArrDelay))
+
+# Interaction plot 1
+ggplot(aes(y = ArrDelayMean, x = as.numeric(LateAircraft), color = DayOfWeek),
+       data = air_means) +
+  geom_point() + geom_line() +
+  scale_y_continuous(limits = c(0, 70)) +
+  scale_x_continuous(limits = c(0.5, 2.5), breaks = c(1, 2),
+                     labels = c("not late", "late")) +
+  labs(x = "Aircraft",
+       y = "Arrival Delay (minutes)",
+       title = "Interaction between Arrival Delay and Delays due to Late Aircraft",
+       color = "Day of Week")
+```
+
+In the interaction plot, almost all the arrival delay times increase when the previous aircraft is late. This shows that the late/not late instances could signficantly affect the arrival delay time. There are some intersections meaning that there is an interaction between arrival delay and late aircraft. 
+
+**Table of means**:
+
+```{r}
+mean_ArrDelay <- airlines %>% 
+                      group_by(DayOfWeek, LateAircraft) %>%
+                      summarize(Mean = mean(newArrDelay))
+table_ArrDelay <- mean_ArrDelay %>% 
+                        spread(DayOfWeek, Mean) %>%
+                        rowwise() %>%
+                        mutate(all = round(mean(c(Mon, Tues, Wed, Thurs, Fri, Sat, Sun)),2)) %>%
+                        mutate(LateAircraft = as.character(LateAircraft)) %>%
+                        rbind(c("All", round(mean(.$Mon),2), round(mean(.$Tues),2),round(mean(.$Wed),2),round(mean(.$Thurs),2),round(mean(.$Fri),2),round(mean(.$Sat),2),round(mean(.$Sun),2), round(mean(.$all),2)))
+pander(table_ArrDelay, round=2, caption="Table of Means by Day")
+
+```
+
+The mean of the log of the arrival time delay for non-late aircrafts is 3.57 minutes and the mean of the log of the arrival time delay for late aircrafts is 3.81 minutes. Overall, the average mean of the log of arrival time delay is around 3.69 minutes.
+
+**Table of Standard Deviations**:
+
+```{r}
+sd_ArrDelay <- airlines %>% 
+                      group_by(DayOfWeek, LateAircraft) %>%
+                      summarize(SD = sd(newArrDelay))
+tableSD_ArrDelay <- sd_ArrDelay %>% 
+                        spread(DayOfWeek, SD) %>%
+                        rowwise() %>%
+                        mutate(all = round(sd(c(Mon, Tues, Wed, Thurs, Fri, Sat, Sun)),2)) %>%
+                        mutate(LateAircraft = as.character(LateAircraft)) %>%
+                        rbind(c("All", round(sd(.$Mon),2), round(sd(.$Tues),2),round(sd(.$Wed),2),round(sd(.$Thurs),2),round(sd(.$Fri),2),round(sd(.$Sat),2),round(sd(.$Sun),2), round(sd(.$all),2)))
+pander(tableSD_ArrDelay, round=2, caption="Table of SD by Day")
+```
+
+
+Since the largest standard deviation/smallest standard deviation is less than 2 (1.6), we do not have to use the Keppel Correction.
+
+# Modeling
+
+```{r}
+airlines_aov<-aov(newArrDelay~DayOfWeek+LateAircraft+DayOfWeek:LateAircraft, data=airlines)
+pander(summary(airlines_aov), caption="Two-Way ANOVA")
+```
+
+The S-pooled is the 0.5171^0.5=0.7190967. The S-pooled is all the standard deviations of the DayOfWeek, LateAircraft, DayOfWeek:LateAircraft combined. Based on the two-way ANOVA table, only LateAircraft is a significant variable since it's the only variable that has a p-value of less than 0.05 (F-value=23.1, p-value=1.84e-06). DayOfWeek is not significant because its p-value is greater than 0.05 (F-value=0.6117, o-value=0.7211) and the interaction effect is not significant(F-value=1.002, p-value=0.4227). Since the interaction effect is not signficant, I will remove the interaction variable from the model and test the other two main effect variables.
+
+
+
+```{r}
+airlines_aov1<-aov(newArrDelay ~ DayOfWeek+LateAircraft, data = airlines)
+
+pander(summary(airlines_aov1), caption="Two-Way ANOVA")
+```
+
+In this model, DayOfWeek is still not a significant main effect (F-value=0.6117, p-value=0.7211). LateAircraft is a significant main effect (F-value=23.1, p-value= 1.838e-06). Since DayOfWeek is not signficant, we will remove it and test a One-Way ANOVA model using LateAircraft. 
+
+
+
+
+**Main effects plot**
+
+```{r}
+airlines_aov2 <- aov(newArrDelay ~ LateAircraft, data = airlines)
+pander(summary(airlines_aov2), caption="One Way ANOVA Model")
+
+
+```
+
+Leaving the interaction effect and DayOfWeek out of the model, LateAircraft remains a signficant main effect (F-value=22.79, p-value=2.15e-06). 
+The final model would be: $$y_{ij} = \mu_{i} + \epsilon_{ij}$$
+j=1,2(LateAircraft, Yes, No), i=flights
+There are three parameters in the model: Late, Not Late, and standard deviation.
+
+**Main Effects Plot**
+
+
+```{r}
+plot(x = as.numeric(air_means$LateAircraft), y = air_means$ArrDelayMean,
+     main = "Main Effects Plot",
+     type = "b")
+
+```
+
+The main effects plot shows that there is a signficant interaction between the log arrival delay in minutes and the late aircraft variable because of the many intersections in the plot. In general, there seems to be an increase in arrival delay when an aircraft is late.
+
+
+
+
+
+
+**For each interval:**
+
+```{r}
+airlines_aov1 <- aov(newArrDelay ~ LateAircraft, data = airlines) # run anova
+airlines_tukey <- TukeyHSD(airlines_aov1)
+
+# Simple tukey plot
+# (would recommend this one)
+plot(airlines_tukey,
+     las = 1, 
+     cex.axis = 0.5) # change size of axis labels so they fit on the plot
+
+```
+
+
+The question that we want to answer with the LateAircraft confidence interval is: Is there a difference in mean arrival delay time when the previous aircraft is late versus when the previous aircraft arrives on time?
+The confidence interval is:(0.1405214, 0.3431806).
+Calculation: (3.804-3.5627)+-2x0.7182x((1/398)+1/406)^0.5
+Since the interval does not contain zero, we conclude that the late aircraft main effect is significant. I am 95% confident that the true mean difference between late vs. arrivalDelay and not late vs. arrivalDelay is between the interval (0.1405214, 0.3431806). I can conclude there is a difference in arrival delay time when an aircraft is late versus when an aircraft is not late.
+
+
+
+
+
+
+
+
+# Discussion
+
+
+In this section, describe your overall results (5-6 sentences). 
+
++ What was significant?  What wasn't?  What did you learn with respect to the original research questions (go back to the original scenario)? Did anything surprise you? What other information would you have liked to know? Please stick to discussions relevant to your data.
+  
+
+The lateness of the previous aircraft main effect is significant. The nature of the interaction between arrival delay time and lateness is positive since the arrival delay time would increase if the previous aircraft was late. The day of week for the flight main effect and the interaction effect were not signficant because the p-values (p-value of Day of Week= 0.7211, p-value of interaction effect=0.4227) were both greater than 0.05. I learned that there are many variables that could affect arrival delay time since the residuals are still very large, this means there are other factors that affect arrival delay time. I was surprised that the day of week was not significant because I thought that busier flight days such as the weekends would have more delays than weekdays would. I would have liked to know more about what factors would affect the arrival delay time such as the weather condition, technical problems with the machinery, and congestion in air traffic. We could predict the arrival delay time more accurately if we could analyze the data for these additional factors.
+

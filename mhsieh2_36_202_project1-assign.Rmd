@@ -1,0 +1,414 @@
+---
+title: 'Stat 202, Project 1: NYCHousing'
+author:
+- Michelle Hsieh
+- mhsieh2
+- There should be no collaborators
+date: "Due 3/9/18 at 11:59 pm"
+output:
+  pdf_document:
+    toc: yes
+  html_document:
+    code_folding: show
+    theme: cosmo
+    toc: yes
+    toc_float: yes
+---
+
+```{r, warning=FALSE, echo=FALSE, message=FALSE}
+###########################
+# RUN THIS BEFORE STARTING
+###########################
+
+library("tidyverse")
+library("knitr")
+library("pander") 
+library("car")
+library("kableExtra")
+
+```
+
+```{r, include=FALSE}
+###########################
+# STYLE EDITS: IGNORE THIS
+###########################
+
+knitr::opts_chunk$set(message = FALSE) # include this if you don't want markdown to knit messages
+knitr::opts_chunk$set(warning = FALSE) # include this if you don't want markdown to knit warnings
+knitr::opts_chunk$set(echo=FALSE) # set echo=FALSE to hide code from html output
+
+```
+
+
+
+# Project Instructions
+
++ This project will allow you to practice putting together a full data analysis, from choosing the research scenario to loading the data through visualization, modeling, and interpretation.  
+
++ It may be helpful to knit the .Rmd file to HTML first so that you can read the prompts in your web browser while you work in R studio. 
+
++ This .Rmd file is broken into several sections.  Some sections like Introduction/Discussion will only require you to write text.  Other sections like Exploratory Data Analysis/Modeling will require you to build code chunks for analysis and then write text to interpret your results.  Remember that this is a report.  Everything should be labeled and formatted correctly; write in complete sentences.
+
++ Note that example code chunks for all of the tasks in this project can be found in your labs or homeworks.  You should start by identifying a useful code chunk that matches the task you want to do, then edit it appropriately.  There is no need to write code from scratch.
+
++ Before submitting, delete any unnecessary text instructions. Keep the headings (e.g. Data, Introduction) but delete the instructions underneath it. This makes your submission look more like a report than a homework assignment. See example report. 
+
++ Submit your completed .Rmd file **AND** .html files on Canvas under Grades > project1 > Submit Assignment.
+
++ As always, the work and words that you submit must be your own.
+
+
+
+
+#  Introduction
+
+
++ Write a 5-7 sentence paragraph that motivates why you chose this research scenario and what its overall modeling goal is (what are you trying to predict? why?).  Include any outside sources or other information that led you to be interested in this scenario (articles you've read, etc; make sure to cite them).
+
+I am interested in how the other half lives since I know that living in NYC is very expensive because of its location, no matter what the living condition of the house is like. The modeling goal is to predict the income of a 53 year old who had 3 maintenance deficiencies and moved to NYC in 1987 because we want to see whether age, maintenance deficiences, and year moved actually have a correlation with the income of the tenant. By concluding this, we can make an inference on whether the age, maintenance deficiences, and year moved affect the income of the respondent. Later on, we can predict the income of the respondent based on the conclusions we draw. I chose to do this research scenario because I'm interested in what kind of people can afford to live in NYC.
+
+
+# Exploratory Data Analysis
+
+## Data
+
+
+You can view the different project scenarios and variable descriptions on Canvas. 
+
++ Choose a scenario and load in the data.
++ Nicely print the first few lines of data. 
+
+
+```{r, message=FALSE}
+# Where is the data stored?
+ data_location <- "http://stat.cmu.edu/202/data/NYCHousing.csv"
+
+# Read in the data
+ living_data<- read_csv(data_location)
+
+text_tbl <- data.frame(stringsAsFactors = FALSE,
+           Variable = c("Income",
+                        "Age",
+                        "MaintenanceDef",
+                        "NYCMove"),
+           Description = c("The total household income (in $)",
+                           "The respondent's age",
+                           "The number of maintenance deficiencies between 2002 and 2005)",
+                           "The year the respondent moved to New York City)")
+                              )
+kable(text_tbl,"html") %>%
+  kable_styling(full_width = F) %>%
+  column_spec(1, bold = T, border_right = T) %>%
+  column_spec(2, width = "30em")
+
+```
+| Income   | Age |MaintenanceDef |   NYCMove    |
+|----------|:---:|--------------:|:------------:|
+| 8400     |  77 |       1       | 1981         |
+| 17510    |  53 |       2       | 1986         |
+| 19200    |  33 |       4       | 1992         |
+| 42717    |  55 |       1       | 1969         |
+
++ Write 4-5 sentences describing your data set. How many observations do you have?  
++ What are the variables? Which is your response? Which are the predictors of interest?
+
+I have 339 observations and the variables are Age, MaintenanceDef, NYCMove, and Income. The response is income. The predictors of interest are Age, MaintenanceDef, and NYCMove. We are interested in finding the relationship between Age with Income, MaintenanceDef with Income, and NYCMove with Income.
+
+
+
+
+
+## Univariate exploration
+
+
+Now, **for each variable**:
+  
++ Create a graph that summarizes its distribution. You can use `par(mfrow=c())` to display multiple graphs at a time. 
++ Create a table that contains summary statistics for each variable (e.g. mean, median, standard deviation, etc).  If you have categorical variables, include the counts for each group.
++ Describe the graphs and tables (1-2 sentences for each variable).
+
+
+```{r, fig.height=7, fig.width=11}
+par(mfrow=c(2, 2)) # for 5 graphs in a 2x3 table
+
+living_data <- mutate(living_data, 
+               Income_curt =(Income^0.33333333))
+living_data <- mutate(living_data, 
+               Age_curt =(Age^0.3333333))
+living_data <- mutate(living_data, MaintenanceDef_sqrt=(MaintenanceDef^0.5))
+
+living_data <- mutate(living_data, 
+               NYCMove_recip =1/(NYCMove))
+
+hist(living_data$Income,
+     main = "Amount of Income", # use `main` argument to set a title
+     xlab = "Income ($)")
+hist(living_data$Age,
+     main = "Age", # use `main` argument to set a title
+     xlab = "Age")
+hist(living_data$MaintenanceDef,
+     main = "MaintenanceDef", # use `main` argument to set a title
+     xlab = "Maintenance Calls")
+hist(living_data$NYCMove,
+     main = "NYCMove", # use `main` argument to set a title
+     xlab = "Year Moved")
+
+
+
+
+x1 <- living_data %>%
+  dplyr::summarize(Min  = min(Income, na.rm = TRUE),
+  Q1 = quantile(Income)[2],
+  Median = quantile(Income)[3],
+  Mean = mean(Income, na.rm = TRUE),
+  Q3 = quantile(Income)[4],
+  Max = max(Income, na.rm = TRUE),
+  SD = sd(Income, na.rm = TRUE)) 
+
+x2 <- living_data %>%
+  dplyr::summarize(Min  = min(Age, na.rm = TRUE),
+  Q1 = quantile(Age)[2],
+  Median = quantile(Age)[3],
+  Mean = mean(Age, na.rm = TRUE),
+  Q3 = quantile(Age)[4],
+  Max = max(Age, na.rm = TRUE),
+  SD = sd(Age, na.rm = TRUE)) 
+
+x3 <- living_data %>%
+  dplyr::summarize(Min  = min(MaintenanceDef, na.rm = TRUE),
+  Q1 = quantile(MaintenanceDef)[2],
+  Median = quantile(MaintenanceDef)[3],
+  Mean = mean(MaintenanceDef, na.rm = TRUE),
+  Q3 = quantile(MaintenanceDef)[4],
+  Max = max(MaintenanceDef, na.rm = TRUE),
+  SD = sd(MaintenanceDef, na.rm = TRUE))
+
+x4 <- living_data %>%
+  dplyr::summarize(Min  = min(NYCMove, na.rm = TRUE),
+  Q1 = quantile(NYCMove)[2],
+  Median = quantile(NYCMove)[3],
+  Mean = mean(NYCMove, na.rm = TRUE),
+  Q3 = quantile(NYCMove)[4],
+  Max = max(NYCMove, na.rm = TRUE),
+  SD = sd(NYCMove, na.rm = TRUE))
+
+cont.vars <- rbind(x1, x2, x3, x4)
+rownames(cont.vars) <- c("Income", "Age", "MaintenanceDef","NYCMove")
+kable(cont.vars, caption = "Continuous Variables", row.names = TRUE)
+
+```
+
+
+```{r}
+par(mfrow=c(2,2))
+hist(living_data$Income_curt,
+     main = "Amount of Income", # use `main` argument to set a title
+     xlab = "Income ($)")
+hist(living_data$Age_curt,
+     main = "Age", # use `main` argument to set a title
+     xlab = "Age")
+hist(living_data$MaintenanceDef_sqrt,
+     main = "MaintenanceDef", # use `main` argument to set a title
+     xlab = "Maintenance Calls")
+hist(living_data$NYCMove_recip,
+     main = "NYCMove", # use `main` argument to set a title
+     xlab = "Year Moved")
+```
+
+
+The distribution of income is skewed right, making the mean larger than the median. I transformed the income by cube rooting the data so the histogram appears more normal.  The distribution of age range from 26 to 85 with an average of about 49. Most of the respondents' ages are close to the average with a few people who are pretty young and few people who are pretty old. The histogram for age was also skewed right so I also cube rooted it to make it appear more normal. Most respondents have moved to NYC in the years 1942-2004 and the distribution is bimodal so I took the reciprocal of the data to make it look more normal. We saw spikes in 1975-1980 and 1990-1995. The MaintenanceDef ranged from 1 to 8 with a median of 1, the distribution is skewed right so I square rooted the graph to make it more centered.
+
+
+
+## Bivariate exploration
+
+**For each predictor variable**:
+  
++ Create a graph that describes the relationship between the predictor variable and the response
+* Describe the graph (1-2 sentences)
+
+You separate this into sections for each variable (like below) or combine the graphs and analysis (like example).
+
+
+### Predictor variable ~ Variable 1 (replace with names of variable)
+
+```{r, fig.height=3.5, fig.width=4}
+#####
+# Bivariate graph (variable 1)
+#####
+
+plot(Income_curt~Age_curt, data=living_data)
+abline(lm(Income_curt~Age_curt, data=living_data))
+
+
+
+```
+```{r}
+#Predictor Variable 2
+plot(Income_curt~MaintenanceDef_sqrt, data=living_data)
+abline(lm(Income_curt~MaintenanceDef_sqrt, data=living_data))
+```
+
+
+```{r}
+#Predictor Variable 3
+plot(Income_curt~NYCMove_recip, data=living_data)
+abline(lm(Income_curt~NYCMove_recip, data=living_data))
+```
+
+
+Based on these graphs, Age has a slightly linear, positive relationship with Income, MaintenanceDef has a slightly negative, vertical relationship with Income, and NYCMove has a slightly positive relationship with Income. This makes sense because the older the respondent is, the higher their income would be. The more maintenance deficiencies there are, the more the respondent would have spent to fix that problem, thus decreasing their income. The later the respondent moves to NYC, the higher their income would be because housing prices generally increase with time, and the richer people can afford to move during the later years.
+
+
+
+
+\ 
+
+# Modeling
+
+
+In this section, you should build a **linear regression model** predicting your response variable using the predictor variables. Explore whether or not you need to transform any of your variables using both the **EDA** graphs and your **diagnostics** (including the **VIF**). You should finish this section with a table that summarizes your final model. The table should have one row for each predictor you keep in the model and five columns: the variable name, the $\hat{\beta}$, the $SE(\hat{\beta})$, the $t^*$, and the p-value (much like the summary output table in R).  
+
+
+Determining how each variable should be included in the model may be an iterative process - try something, look at diagnostics, try something else, look at diagnostics, etc.  You do not need to talk about every transformation or diagnostic you tried. Only describe what your final decision is and why you made it.
+
+**Note:** You will all do slightly different things. This is okay, and expected. Justify your model correctly and you will receive full credit. 
+
+
++ Introduce modeling section; begin to discuss transformations and diagnostics. 
++ Describe your final decisions about each variable (why you did or did not include them). Include diagnostics.
++ Output the summary table of your final model.
++ Write a short paragraph interpreting the significant coefficients in your model.
+
+\ 
+
+I took the cube root of age and income because they seemed to be skewed right and this made them both look more centered (based on the histogram generated). I square rooted the maintenance def because it was skewed right as well but when I cube rooted it, it had missing bars. I took the reciprocal of the NYCMove data because it was bimodal and this helped center the data as well. All these changes helped in making the data more normally distributed.
+
+
+```{r}
+#####
+# Code chunks for transformations and diagnostics
+#####
+pairs(living_data %>% select(-c(Income, Income_curt, Age, MaintenanceDef, NYCMove)))
+
+
+
+```
+
+```{r}
+#####
+# Regression Model
+#####
+
+incomeNewModel<-lm(Income_curt~Age_curt+MaintenanceDef_sqrt+NYCMove_recip, data=living_data)
+
+income_model<-lm(Income~Age+MaintenanceDef+NYCMove, data=living_data)
+
+pander(summary(incomeNewModel))
+
+
+qqPlot(incomeNewModel$residuals)
+qqline(incomeNewModel$residuals)
+
+# Calculate Residuals of Regression Model
+RESI <- residuals(incomeNewModel)
+# Calculate Fitted Values (Y hat) of Regression Model
+Y_hat <- predict(incomeNewModel)
+
+# Produce Residuals Plot
+plot(Y_hat, RESI,
+     xlab = "Fitted Value", ylab = "Residual",
+     main = "Residuals vs Fits Plot")
+# Add horizontal line at zero
+abline(h=0)
+
+
+```
+
+The Normal QQ Plot shows that the data is normal since it follows the plot line within bounds of the red dotted lines. Since the residuals are roughly equally spread above and below the 0 line, we meet the assumption that the errors have constant spread. The mean is also at 0 for the residual plot. Since the residuals are randomly scattered with no pattern, this shows that the data is independent.
+
+```{r}
+
+pander(vif(incomeNewModel))
+```
+Since the VIF of each variable is less than 2.5, we can rule out multicollinearity and say that the multicollinearity model assumption has been met.
+
+The equation of model is:
+$$\text{Income}=-24.47-0.1021(\text{Age_sqrt})+-3.366(\text{MaintenanceDef_sqrt})+127535(\text{NYCMove_recip})$$
+
+
+```{r}
+incomeAgeModel<-lm(Income_curt~Age_curt, data=living_data) #SLR of income and age
+incomeMaintenanceDefModel<-lm(Income_curt~MaintenanceDef_sqrt, data=living_data) #SLR of income and MaintenanceDef
+incomeNYCMoveModel<-lm(Income_curt~NYCMove_recip, data=living_data)#SLR of income and NYCMove
+
+pander(summary(incomeAgeModel))
+pander(summary(incomeMaintenanceDefModel))
+pander(summary(incomeNYCMoveModel))
+```
+
+Since the graphs show no relationship between the varaibles and the VIF for all the variables is less than 2.5, we can assume that there is no multicollinearity. According to the multiple linear regression table, MaintenanceDef is the only significant variable since it's the only variable with a p-value of less than 0.05, so we drop the other variables. I did the SLR with Income and MaintenanceDef to get the coefficients for beta_0 and beta_1.
+
+The equation of our final model is: 
+$$\text{Income}=-39.85-3.645(\text{MaintenanceDef_sqrt})$$
+
+In the equation, the coefficient for MaintenanceDef is negative which corresponds with the EDA results from earlier. 
+
+
+$\hat{\beta}_2$=-3.645: This means that we predict that for an increase in MaintenanceDef_sqrt by one maintenance deficiency, their income would decrease by 3.645^0.5 dollars.
+
+
+
+In conclusion, the signs of the coefficients correspond with the EDA results and the amount of multicollinearity is normal (VIF<2.5), but this model does not have a high R^2 value. There may be other variables that account for income besides age, maintenanceDef, and the year the respondent moved to NYC that were not accounted for since the multiple linear regression model showed that these three variables comprised of only 5% of the resulting income. We are confident that MaintenanceDef is associated with income.
+
+
+ 
+
+# Prediction
+
+
+In this short section, you will use your final model to predict a value of interest (see scenario for specific prediction). 
+
++ Write text introducing/describing the prediction you're making and why (from the chosen research scenario).
+
++ Create a table with one row (for the prediction) and three columns that contain the prediction point estimate, the 95% confidence interval, and the 95% prediction interval. Interpret your results.
+
+Since we have an acceptable predictive model, I am interested in predicting the income of a 53 year old who moved to NYC in 1987 and had 3 maintenance deficiencies. I need to find this prediction because these values are relatively close to the means of each variable, so this would help interpret how the model fits on average.
+
+```{r, results="hide"}
+#####
+# code chunk for predicting, including intervals
+#####
+
+final_model<-lm(Income~MaintenanceDef_sqrt, data=living_data)
+
+new_dat<-data.frame(Age_curt=53^0.33333, MaintenanceDef_sqrt=3^0.5, NYCMove_recip=1/1987)
+
+pander(predict(final_model, newdata=new_dat, interval="confidence"))
+
+pander(predict(final_model, newdata=new_dat, interval="prediction"))
+
+```
+
+
+
+|Data to Predict   |Prediction point estimate |95% confidence interval|95% prediction interval|
+|------------------|:------------------------:|:---------------------:|:---------------------:|
+Income~Age=53, MaintenaceDef=3, NYCMove=1987 |     45,241             |            (40048, 50433)           |           (-27518, 117999)         |
+
+
+
+
+
+\ 
+
+# Discussion
+
+
+In this section, describe your overall results (5-6 sentences). 
+
++ What was significant?  What wasn't?  What did you learn with respect to the original research questions (go back to the original scenario)? Did anything surprise you? What other information would you have liked to know?
+
+Since the p-value for MaintenanceDef was less than 0.05 and the rest weren't, MaintenanceDef was a siginficiant variable while Age and NYCMove were not so I dropped Age and NYCMove since these variables would decrease the precision of the model. I learned that according to the final model that age and the year moved do not affect the income which is surprising because I thought that the older the respondent was, the higher their income would be and same for the year moved. With inflation, people would think that housing prices would go up and the people with more income would be able to live in those more expensive houses. I would like to know what other variables could have affected income more significantly since the variables that I analyzed proved to not be comprise of most of the income variability because the R^2 was small. This study shows that there are more factors to estimate income besides age, year moved, and maintenance deficiencies.
+  
+
